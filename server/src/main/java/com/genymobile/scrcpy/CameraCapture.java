@@ -1,9 +1,8 @@
 package com.genymobile.scrcpy;
 
-import com.genymobile.scrcpy.wrappers.ServiceManager;
-
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
+import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -22,6 +21,12 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Range;
 import android.view.Surface;
+import android.view.View;
+import android.view.WindowManager;
+
+import com.genymobile.scrcpy.wrappers.ServiceManager;
+
+import org.joor.Reflect;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -83,7 +88,24 @@ public class CameraCapture extends SurfaceCapture {
             }
 
             Ln.i("Using camera '" + cameraId + "'");
-            cameraDevice = openCamera(cameraId);
+            int retry = 0;
+            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.R) {
+                retry = 3;
+                prepareOverlayWindow();
+            }
+            while (true) {
+                try {
+                    cameraDevice = openCamera(cameraId);
+                    break;
+                } catch (CameraAccessException err) {
+                    if (retry > 0) {
+                        retry--;
+                        Thread.sleep(200);
+                    } else {
+                        throw err;
+                    }
+                }
+            }
         } catch (CameraAccessException | InterruptedException e) {
             throw new IOException(e);
         }
@@ -232,6 +254,20 @@ public class CameraCapture extends SurfaceCapture {
             Ln.w("Could not select camera size", e);
             return false;
         }
+    }
+
+    @TargetApi(Build.VERSION_CODES.R)
+    private void prepareOverlayWindow() {
+        View overlay = new View(FakeContext.get());
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            Reflect.onClass(WindowManager.LayoutParams.class).get("TYPE_SECURE_SYSTEM_OVERLAY"),
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            PixelFormat.TRANSLUCENT
+        );
+
+        WindowManager wm = FakeContext.get().getSystemService(WindowManager.class);
+        wm.addView(overlay, params);
     }
 
     @SuppressLint("MissingPermission")

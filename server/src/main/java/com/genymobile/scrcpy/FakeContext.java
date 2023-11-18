@@ -2,9 +2,13 @@ package com.genymobile.scrcpy;
 
 import android.annotation.TargetApi;
 import android.content.AttributionSource;
+import android.content.Context;
 import android.content.MutableContextWrapper;
+import android.os.Binder;
 import android.os.Build;
 import android.os.Process;
+
+import org.joor.Reflect;
 
 public final class FakeContext extends MutableContextWrapper {
 
@@ -12,6 +16,8 @@ public final class FakeContext extends MutableContextWrapper {
     public static final int ROOT_UID = 0; // Like android.os.Process.ROOT_UID, but before API 29
 
     private static final FakeContext INSTANCE = new FakeContext();
+
+    private static final Binder sWindowToken = new Binder();
 
     public static FakeContext get() {
         return INSTANCE;
@@ -43,5 +49,16 @@ public final class FakeContext extends MutableContextWrapper {
     @SuppressWarnings("unused")
     public int getDeviceId() {
         return 0;
+    }
+
+    @Override
+    public Object getSystemService(String name) {
+        Object service = super.getSystemService(name);
+
+        if (name.equals(Context.WINDOW_SERVICE)) {
+            Reflect.on(service).call("setDefaultToken", sWindowToken);
+        }
+
+        return service;
     }
 }
